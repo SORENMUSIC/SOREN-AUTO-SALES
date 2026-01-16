@@ -1,0 +1,383 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Calculator, 
+  CheckCircle2, 
+  XCircle, 
+  TrendingUp, 
+  DollarSign, 
+  User, 
+  Clock, 
+  ShieldCheck,
+  Calendar,
+  Wallet,
+  ArrowRight,
+  FileText
+} from 'lucide-react';
+
+const App = () => {
+  // Application State
+  const [formData, setFormData] = useState({
+    customerName: '',
+    creditScore: '',
+    monthlyIncome: '',
+    vehiclePrice: '',
+    cashInHand: '', 
+    useHighIncomeExtension: false,
+    paymentFrequency: 'biweekly',
+    deferredPaymentsCount: 2
+  });
+
+  const [results, setResults] = useState(null);
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(val || 0);
+  };
+
+  const calculateUnderwriting = () => {
+    const score = parseInt(formData.creditScore);
+    const income = parseFloat(formData.monthlyIncome);
+    const price = parseFloat(formData.vehiclePrice);
+    const cash = parseFloat(formData.cashInHand) || 0;
+
+    if (isNaN(score) || isNaN(income) || isNaN(price)) return;
+
+    let tier = {
+      downPayment: 0,
+      term: 0,
+      apr: 0,
+      label: ""
+    };
+
+    // Credit Tiers Logic (The Core Requirement)
+    if (score >= 650) {
+      tier = { downPayment: 1000, term: 48, apr: 15, label: "650+ (Prime)" };
+    } else if (score >= 600) {
+      tier = { downPayment: 1250, term: 48, apr: 18, label: "600-649 (Tier 1)" };
+    } else if (score >= 550) {
+      tier = { downPayment: 1750, term: 42, apr: 21, label: "550-599 (Tier 2)" };
+    } else if (score >= 500) {
+      tier = { downPayment: 2250, term: 36, apr: 24, label: "500-549 (Tier 3)" };
+    } else {
+      tier = { downPayment: 3000, term: 30, apr: 28, label: "<500 (Tier 4)" };
+    }
+
+    // High Income Extension Logic
+    let finalTerm = tier.term;
+    if (income >= 3500 && formData.useHighIncomeExtension) {
+      finalTerm = 72;
+    }
+
+    const amountFinanced = price - tier.downPayment;
+    
+    // Payment Calculation
+    const monthlyRate = (tier.apr / 100) / 12;
+    const monthlyPayment = amountFinanced > 0 
+      ? (amountFinanced * (monthlyRate * Math.pow(1 + monthlyRate, finalTerm))) / (Math.pow(1 + monthlyRate, finalTerm) - 1)
+      : 0;
+
+    const biWeeklyPayment = (monthlyPayment * 12) / 26;
+    const pti = (monthlyPayment / income) * 100;
+
+    // Optional Pickup (Deferred) Logic
+    const downShortfall = Math.max(0, tier.downPayment - cash);
+    const deferredPaymentAmount = downShortfall > 0 ? downShortfall / formData.deferredPaymentsCount : 0;
+
+    // Approval Rules
+    const reasons = [];
+    if (score < 450) reasons.push("Credit score below minimum (450)");
+    if (income < 1800) reasons.push("Monthly income below minimum ($1,800)");
+    if (pti > 25) reasons.push(`Payment exceeds 25% of income (${pti.toFixed(1)}%)`);
+
+    setResults({
+      isApproved: reasons.length === 0,
+      reasons,
+      tier: { ...tier, term: finalTerm },
+      amountFinanced,
+      monthlyPayment,
+      biWeeklyPayment,
+      pti,
+      downShortfall,
+      deferredPaymentAmount,
+      totalCost: (monthlyPayment * finalTerm) + tier.downPayment
+    });
+  };
+
+  useEffect(() => {
+    calculateUnderwriting();
+  }, [formData]);
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-12">
+      {/* Header */}
+      <nav className="bg-slate-900 text-white p-5 shadow-lg no-print">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="text-indigo-500 w-8 h-8" />
+            <div>
+              <h1 className="font-bold text-xl uppercase tracking-tight">Soren Auto Sales</h1>
+              <p className="text-[10px] tracking-widest opacity-60 -mt-1 uppercase">Smart Underwriting Portal</p>
+            </div>
+          </div>
+          <div className="text-right">
+             <p className="text-[10px] text-slate-400 uppercase">Tier Compliance</p>
+             <p className="text-xs font-bold text-emerald-400">ACTIVE</p>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Left Column: Input and Tiers */}
+        <div className="lg:col-span-5 space-y-6 no-print">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <h2 className="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b pb-4">
+              <User className="w-4 h-4 text-indigo-600" /> Customer & Vehicle
+            </h2>
+            <div className="space-y-4">
+              <input name="customerName" value={formData.customerName} onChange={handleInputChange} placeholder="Customer Full Name" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500" />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Credit Score</label>
+                  <input type="number" name="creditScore" value={formData.creditScore} onChange={handleInputChange} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Monthly Income</label>
+                  <input type="number" name="monthlyIncome" value={formData.monthlyIncome} onChange={handleInputChange} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vehicle Price</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input type="number" name="vehiclePrice" value={formData.vehiclePrice} onChange={handleInputChange} className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-indigo-600" />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                <input 
+                  type="checkbox" 
+                  name="useHighIncomeExtension" 
+                  checked={formData.useHighIncomeExtension} 
+                  onChange={handleInputChange} 
+                  disabled={parseFloat(formData.monthlyIncome) < 3500}
+                  className="w-5 h-5 rounded border-indigo-300 text-indigo-600"
+                />
+                <span className={`text-xs font-bold ${parseFloat(formData.monthlyIncome) < 3500 ? 'text-slate-400' : 'text-indigo-900'}`}>
+                  Enable 72-Month High Income Extension
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Reference Tiers (Visible to User) */}
+          <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200">
+            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Underwriting Guidelines</h3>
+            <div className="space-y-2">
+              {[
+                { s: "650+", d: "$1,000", t: "48m", a: "15%" },
+                { s: "600-649", d: "$1,250", t: "48m", a: "18%" },
+                { s: "550-599", d: "$1,750", t: "42m", a: "21%" },
+                { s: "500-549", d: "$2,250", t: "36m", a: "24%" },
+                { s: "<500", d: "$3,000", t: "30m", a: "28%" },
+              ].map((tier, i) => (
+                <div key={i} className="flex justify-between text-[11px] font-medium border-b border-slate-200 pb-1">
+                  <span className="w-20 text-slate-700 font-bold">{tier.s} Score</span>
+                  <span className="text-indigo-600">{tier.d} Down</span>
+                  <span className="text-slate-500">{tier.t} / {tier.a}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Optional Pickup Feature */}
+          <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-xl">
+            <h3 className="text-xs font-bold text-amber-400 mb-4 flex items-center gap-2 uppercase tracking-widest">
+              <Wallet className="w-4 h-4" /> Optional Pickup Assistance
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-slate-400 uppercase mb-1">Cash In-Hand Today</label>
+                <input type="number" name="cashInHand" value={formData.cashInHand} onChange={handleInputChange} placeholder="0.00" className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 outline-none" />
+              </div>
+              {results?.downShortfall > 0 && (
+                <div>
+                  <label className="block text-[10px] text-slate-400 uppercase mb-1">Pickup Payment Split</label>
+                  <select name="deferredPaymentsCount" value={formData.deferredPaymentsCount} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 outline-none">
+                    <option value="2">2 Split Payments</option>
+                    <option value="3">3 Split Payments</option>
+                    <option value="4">4 Split Payments</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Results & Analysis */}
+        <div className="lg:col-span-7">
+          {!results ? (
+            <div className="h-full flex flex-col items-center justify-center bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400 p-12 text-center no-print">
+              <Calculator className="w-16 h-16 mb-4 opacity-10" />
+              <p className="text-lg font-bold">Waiting for Data</p>
+              <p className="text-sm">Approval status will appear once details are entered.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Decision Banner */}
+              <div className={`rounded-3xl p-8 border-t-[12px] shadow-lg ${results.isApproved ? 'bg-emerald-50 border-emerald-500' : 'bg-rose-50 border-rose-500'}`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className={`text-5xl font-black ${results.isApproved ? 'text-emerald-900' : 'text-rose-900'}`}>
+                      {results.isApproved ? 'APPROVED' : 'DECLINED'}
+                    </h2>
+                    <p className="font-bold text-slate-600 mt-2 uppercase text-xs tracking-wider">Soren Auto Sales Underwriting Decision</p>
+                  </div>
+                  {results.isApproved ? <CheckCircle2 className="w-14 h-14 text-emerald-500" /> : <XCircle className="w-14 h-14 text-rose-500" />}
+                </div>
+
+                {!results.isApproved && (
+                  <div className="mt-6 p-4 bg-white/60 rounded-xl border border-rose-100 no-print">
+                    <p className="text-[10px] font-black text-rose-900 uppercase mb-2">Rejection Analysis:</p>
+                    {results.reasons.map((r, i) => <div key={i} className="text-sm text-rose-700 flex items-center gap-2 mb-1"><ArrowRight className="w-3 h-3" /> {r}</div>)}
+                  </div>
+                )}
+              </div>
+
+              {/* Deal Breakdown */}
+              <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="bg-slate-900 p-4 px-8 flex justify-between text-white no-print">
+                  <span className="text-[10px] font-black tracking-widest">FINANCIAL STRUCTURE</span>
+                  <div className="flex gap-4">
+                    <button onClick={() => setFormData(p => ({...p, paymentFrequency: 'biweekly'}))} className={`text-[10px] font-bold ${formData.paymentFrequency === 'biweekly' ? 'text-indigo-400' : 'text-slate-500'}`}>BI-WEEKLY</button>
+                    <button onClick={() => setFormData(p => ({...p, paymentFrequency: 'monthly'}))} className={`text-[10px] font-bold ${formData.paymentFrequency === 'monthly' ? 'text-indigo-400' : 'text-slate-500'}`}>MONTHLY</button>
+                  </div>
+                </div>
+
+                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">Required Down Payment</p>
+                      <p className="text-4xl font-black text-slate-900">{formatCurrency(results.tier.downPayment)}</p>
+                      <span className="inline-block bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-1 rounded mt-2 uppercase tracking-tight">{results.tier.label}</span>
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">Note Installment</p>
+                      <p className="text-3xl font-black text-indigo-700">
+                        {formData.paymentFrequency === 'biweekly' ? formatCurrency(results.biWeeklyPayment) : formatCurrency(results.monthlyPayment)}
+                      </p>
+                      <p className="text-xs font-bold text-slate-500 mt-1 uppercase italic tracking-tighter">
+                        Starts after pickup balance is $0.00
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <div className="space-y-4">
+                      <div className="flex justify-between">
+                        <span className="text-xs font-bold text-slate-400">TERM:</span>
+                        <span className="text-xs font-black">{results.tier.term} Months</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs font-bold text-slate-400">APR:</span>
+                        <span className="text-xs font-black">{results.tier.apr}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs font-bold text-slate-400">FINANCED:</span>
+                        <span className="text-xs font-black">{formatCurrency(results.amountFinanced)}</span>
+                      </div>
+                      <div className="flex justify-between pt-4 border-t border-slate-200">
+                        <span className="text-xs font-bold text-slate-400">PTI RATIO:</span>
+                        <span className={`text-xs font-black ${results.pti > 25 ? 'text-rose-600' : 'text-emerald-600'}`}>{results.pti.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pickup Plan - Only visible if shortfall exists */}
+                {results.downShortfall > 0 && (
+                  <div className="mx-8 mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Clock className="w-4 h-4 text-amber-600" />
+                      <h4 className="text-xs font-black text-amber-900 uppercase">Pickup Schedule (Required First)</h4>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-xl font-black text-amber-700">{formatCurrency(results.deferredPaymentAmount)}</p>
+                        <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">{formData.deferredPaymentsCount} Total Payments Due {formData.paymentFrequency}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Cash Paid Today</p>
+                        <p className="text-lg font-black text-slate-700">{formatCurrency(formData.cashInHand || 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Print Action */}
+              <div className="no-print">
+                <button 
+                  onClick={() => window.print()}
+                  className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:bg-slate-800 transition-all uppercase tracking-widest"
+                >
+                  <FileText className="w-5 h-5" /> Generate Print Approval
+                </button>
+              </div>
+
+              {/* Professional Print View Disclaimer */}
+              <div className="hidden print:block mt-12 space-y-8">
+                <div className="grid grid-cols-2 gap-12 pt-12 border-t border-slate-200">
+                  <div>
+                    <h5 className="text-[10px] font-black uppercase mb-4 tracking-widest">Buyer Acknowledgement</h5>
+                    <div className="h-10 border-b border-slate-400 mb-2"></div>
+                    <p className="text-[10px] text-slate-500">I confirm the above financial terms for the purchase of the collateral. I understand the pickup plan must be completed before regular payments begin.</p>
+                  </div>
+                  <div>
+                    <h5 className="text-[10px] font-black uppercase mb-4 tracking-widest">Authorized Dealership Rep</h5>
+                    <div className="h-10 border-b border-slate-400 mb-2"></div>
+                    <p className="text-[10px] text-slate-500 font-bold">Manager Approval Signature • Soren Auto Sales</p>
+                  </div>
+                </div>
+                <div className="text-center text-[9px] text-slate-400 italic">
+                  * Approval expires 48 hours from {new Date().toLocaleDateString()}. Final contract subject to verification of employment and residence.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <footer className="mt-12 text-center text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] no-print">
+        Official Underwriting Tool for Soren Auto Sales
+      </footer>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          nav, footer, .no-print { display: none !important; }
+          main { margin: 0 !important; max-width: 100% !important; display: block !important; }
+          .lg\\:col-span-7 { width: 100% !important; }
+          body { background: white !important; padding: 20px !important; }
+          .shadow-sm, .shadow-lg { box-shadow: none !important; border: 1px solid #eee !important; }
+          .rounded-3xl { border-radius: 0 !important; }
+          .bg-slate-50, .bg-amber-50, .bg-emerald-50, .bg-rose-50 { background-color: transparent !important; }
+        }
+      `}} />
+    </div>
+  );
+};
+
+export default App;
